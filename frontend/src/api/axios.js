@@ -1,8 +1,16 @@
 import axios from "axios";
 
-// Create a pre-configured axios instance pointing at our backend
 const api = axios.create({
   baseURL: "http://localhost:5000/api",
+});
+
+// This runs before EVERY request made with `api`
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 export default api;
