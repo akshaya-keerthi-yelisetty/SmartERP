@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import api from "../api/axios";
 import CompanyModal from "../components/CompanyModal";
 
@@ -111,12 +111,17 @@ function Dashboard() {
             <span>
               Active company: <strong>{activeCompany.name}</strong>
             </span>
-            <button
-              onClick={() => selectCompany(null)}
-              className="text-blue-600 hover:underline text-sm"
-            >
-              Clear
-            </button>
+            <div className="flex items-center gap-3">
+              <Link to="/ledgers" className="text-blue-600 hover:underline text-sm font-medium">
+                Manage Ledgers →
+              </Link>
+              <button
+                onClick={() => selectCompany(null)}
+                className="text-blue-600 hover:underline text-sm"
+              >
+                Clear
+              </button>
+            </div>
           </div>
         )}
 
