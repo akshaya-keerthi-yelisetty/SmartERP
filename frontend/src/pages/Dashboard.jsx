@@ -115,6 +115,9 @@ function Dashboard() {
               <Link to="/ledgers" className="text-blue-600 hover:underline text-sm font-medium">
                 Manage Ledgers →
               </Link>
+              <Link to="/inventory" className="text-blue-600 hover:underline text-sm font-medium">
+  Manage Inventory →
+</Link>
               <button
                 onClick={() => selectCompany(null)}
                 className="text-blue-600 hover:underline text-sm"
