@@ -5,6 +5,7 @@ require("dotenv").config();
 const pool = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const companyRoutes = require("./routes/companyRoutes");
+const ledgerRoutes = require("./routes/ledgerRoutes");
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.get("/api/db-test", async (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/companies", companyRoutes);
+app.use("/api/ledgers", ledgerRoutes);
 
 const PORT = process.env.PORT || 5000;
 
