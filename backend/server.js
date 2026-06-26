@@ -6,6 +6,8 @@ const pool = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const companyRoutes = require("./routes/companyRoutes");
 const ledgerRoutes = require("./routes/ledgerRoutes");
+const stockGroupRoutes = require("./routes/stockGroupRoutes");
+const stockItemRoutes = require("./routes/stockItemRoutes");
 
 const app = express();
 
@@ -32,6 +34,8 @@ app.get("/api/db-test", async (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/companies", companyRoutes);
 app.use("/api/ledgers", ledgerRoutes);
+app.use("/api/stock-groups", stockGroupRoutes);
+app.use("/api/stock-items", stockItemRoutes);
 
 const PORT = process.env.PORT || 5000;
 
