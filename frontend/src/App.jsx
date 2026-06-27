@@ -4,6 +4,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Ledgers from "./pages/Ledgers";
 import Inventory from "./pages/Inventory";
+import Vouchers from "./pages/Vouchers";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 
@@ -35,6 +36,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Inventory />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/vouchers"
+            element={
+              <ProtectedRoute>
+                <Vouchers />
               </ProtectedRoute>
             }
           />
