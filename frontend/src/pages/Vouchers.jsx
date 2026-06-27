@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../api/axios";
 import VoucherModal from "../components/VoucherModal";
+import { generateInvoicePDF } from "../utils/generateInvoicePDF";
 
 function Vouchers() {
   const { activeCompany } = useAuth();
@@ -58,6 +59,15 @@ function Vouchers() {
       fetchAll();
     } catch (err) {
       alert(err.response?.data?.message || "Failed to save voucher");
+    }
+  };
+
+  const handleDownloadInvoice = async (voucherId) => {
+    try {
+      const res = await api.get(`/vouchers/${voucherId}`);
+      generateInvoicePDF(res.data.voucher, res.data.items, activeCompany.name);
+    } catch (err) {
+      alert("Failed to generate invoice");
     }
   };
 
@@ -153,7 +163,15 @@ function Vouchers() {
                     {v.notes && ` • ${v.notes}`}
                   </p>
                 </div>
-                <span className="font-bold text-gray-800">₹{v.grand_total}</span>
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-gray-800">₹{v.grand_total}</span>
+                  <button
+                    onClick={() => handleDownloadInvoice(v.id)}
+                    className="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm hover:bg-blue-200"
+                  >
+                    Download Invoice
+                  </button>
+                </div>
               </div>
             ))}
           </div>
