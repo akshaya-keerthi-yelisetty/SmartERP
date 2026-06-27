@@ -9,10 +9,9 @@ const verifyCompanyOwnership = async (companyId, userId) => {
 };
 
 // CREATE a Purchase Voucher
-// Body shape: { companyId, ledgerId, voucherDate, notes, items: [{ stockItemId, quantity, rate }] }
 const createPurchaseVoucher = async (req, res) => {
   const userId = req.userId;
-  const { companyId, ledgerId, voucherDate, notes, items } = req.body;
+  const { companyId, ledgerId, voucherDate, notes, items, gstPercent } = req.body;
 
   if (!companyId || !ledgerId || !items || items.length === 0) {
     return res
@@ -25,31 +24,27 @@ const createPurchaseVoucher = async (req, res) => {
     return res.status(403).json({ message: "Access denied to this company" });
   }
 
-  // Get a single dedicated connection from the pool for this whole transaction.
-  // We can't use pool.query() for transactions because each pool.query() call
-  // might run on a DIFFERENT connection — we need ONE connection for all the
-  // steps below, so they're treated as a single unit by Postgres.
   const client = await pool.connect();
 
   try {
-    // Start the transaction
     await client.query("BEGIN");
 
-    // Calculate the total amount across all items
     let totalAmount = 0;
     for (const item of items) {
       totalAmount += item.quantity * item.rate;
     }
 
-    // 1. Create the voucher record itself
+    const gstRate = gstPercent || 0;
+    const gstAmount = (totalAmount * gstRate) / 100;
+    const grandTotal = totalAmount + gstAmount;
+
     const voucherResult = await client.query(
-      `INSERT INTO vouchers (company_id, voucher_type, ledger_id, voucher_date, total_amount, notes)
-       VALUES ($1, 'purchase', $2, $3, $4, $5) RETURNING *`,
-      [companyId, ledgerId, voucherDate || new Date(), totalAmount, notes || null]
+      `INSERT INTO vouchers (company_id, voucher_type, ledger_id, voucher_date, total_amount, gst_percent, gst_amount, grand_total, notes)
+       VALUES ($1, 'purchase', $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [companyId, ledgerId, voucherDate || new Date(), totalAmount, gstRate, gstAmount, grandTotal, notes || null]
     );
     const voucher = voucherResult.rows[0];
 
-    // 2. Create each voucher_item, AND increase that stock item's quantity
     for (const item of items) {
       const amount = item.quantity * item.rate;
 
@@ -59,20 +54,17 @@ const createPurchaseVoucher = async (req, res) => {
         [voucher.id, item.stockItemId, item.quantity, item.rate, amount]
       );
 
-      // Purchases INCREASE stock on hand
       await client.query(
         `UPDATE stock_items SET quantity = quantity + $1 WHERE id = $2`,
         [item.quantity, item.stockItemId]
       );
     }
 
-    // 3. Update the supplier's ledger balance (purchase = we owe them more = increase their balance)
     await client.query(
       `UPDATE ledgers SET opening_balance = opening_balance + $1 WHERE id = $2`,
-      [totalAmount, ledgerId]
+      [grandTotal, ledgerId]
     );
 
-    // Everything succeeded — make all the changes permanent
     await client.query("COMMIT");
 
     res.status(201).json({
@@ -80,12 +72,100 @@ const createPurchaseVoucher = async (req, res) => {
       voucher,
     });
   } catch (error) {
-    // Something failed — undo EVERYTHING from this transaction, as if none of it happened
     await client.query("ROLLBACK");
     console.error("Create purchase voucher error:", error);
     res.status(500).json({ message: "Server error creating purchase voucher" });
   } finally {
-    // Always release the connection back to the pool, whether we succeeded or failed
+    client.release();
+  }
+};
+
+// CREATE a Sales Voucher
+const createSalesVoucher = async (req, res) => {
+  const userId = req.userId;
+  const { companyId, ledgerId, voucherDate, notes, items, gstPercent } = req.body;
+
+  if (!companyId || !ledgerId || !items || items.length === 0) {
+    return res
+      .status(400)
+      .json({ message: "companyId, ledgerId, and at least one item are required" });
+  }
+
+  const ownsCompany = await verifyCompanyOwnership(companyId, userId);
+  if (!ownsCompany) {
+    return res.status(403).json({ message: "Access denied to this company" });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    for (const item of items) {
+      const stockResult = await client.query(
+        "SELECT quantity, name FROM stock_items WHERE id = $1",
+        [item.stockItemId]
+      );
+
+      if (stockResult.rows.length === 0) {
+        throw new Error(`Stock item ${item.stockItemId} not found`);
+      }
+
+      const availableQuantity = parseFloat(stockResult.rows[0].quantity);
+      if (availableQuantity < item.quantity) {
+        throw new Error(
+          `Not enough stock for "${stockResult.rows[0].name}". Available: ${availableQuantity}, Requested: ${item.quantity}`
+        );
+      }
+    }
+
+    let totalAmount = 0;
+    for (const item of items) {
+      totalAmount += item.quantity * item.rate;
+    }
+
+    const gstRate = gstPercent || 0;
+    const gstAmount = (totalAmount * gstRate) / 100;
+    const grandTotal = totalAmount + gstAmount;
+
+    const voucherResult = await client.query(
+      `INSERT INTO vouchers (company_id, voucher_type, ledger_id, voucher_date, total_amount, gst_percent, gst_amount, grand_total, notes)
+       VALUES ($1, 'sales', $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [companyId, ledgerId, voucherDate || new Date(), totalAmount, gstRate, gstAmount, grandTotal, notes || null]
+    );
+    const voucher = voucherResult.rows[0];
+
+    for (const item of items) {
+      const amount = item.quantity * item.rate;
+
+      await client.query(
+        `INSERT INTO voucher_items (voucher_id, stock_item_id, quantity, rate, amount)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [voucher.id, item.stockItemId, item.quantity, item.rate, amount]
+      );
+
+      await client.query(
+        `UPDATE stock_items SET quantity = quantity - $1 WHERE id = $2`,
+        [item.quantity, item.stockItemId]
+      );
+    }
+
+    await client.query(
+      `UPDATE ledgers SET opening_balance = opening_balance - $1 WHERE id = $2`,
+      [grandTotal, ledgerId]
+    );
+
+    await client.query("COMMIT");
+
+    res.status(201).json({
+      message: "Sales voucher created successfully",
+      voucher,
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Create sales voucher error:", error);
+    res.status(400).json({ message: error.message || "Server error creating sales voucher" });
+  } finally {
     client.release();
   }
 };
@@ -128,7 +208,7 @@ const getVouchers = async (req, res) => {
   }
 };
 
-// GET a single voucher with its line items (for viewing/printing an invoice later)
+// GET a single voucher with its line items
 const getVoucherById = async (req, res) => {
   const userId = req.userId;
   const voucherId = req.params.id;
@@ -162,102 +242,6 @@ const getVoucherById = async (req, res) => {
   } catch (error) {
     console.error("Get voucher by id error:", error);
     res.status(500).json({ message: "Server error fetching voucher" });
-  }
-};
-// CREATE a Sales Voucher
-// Body shape: { companyId, ledgerId, voucherDate, notes, items: [{ stockItemId, quantity, rate }] }
-const createSalesVoucher = async (req, res) => {
-  const userId = req.userId;
-  const { companyId, ledgerId, voucherDate, notes, items } = req.body;
-
-  if (!companyId || !ledgerId || !items || items.length === 0) {
-    return res
-      .status(400)
-      .json({ message: "companyId, ledgerId, and at least one item are required" });
-  }
-
-  const ownsCompany = await verifyCompanyOwnership(companyId, userId);
-  if (!ownsCompany) {
-    return res.status(403).json({ message: "Access denied to this company" });
-  }
-
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    // SAFETY CHECK: before doing anything, confirm enough stock exists for EVERY item.
-    // We check all items first, so if item #3 of 5 fails, we haven't already
-    // partially modified items #1 and #2.
-    for (const item of items) {
-      const stockResult = await client.query(
-        "SELECT quantity, name FROM stock_items WHERE id = $1",
-        [item.stockItemId]
-      );
-
-      if (stockResult.rows.length === 0) {
-        throw new Error(`Stock item ${item.stockItemId} not found`);
-      }
-
-      const availableQuantity = parseFloat(stockResult.rows[0].quantity);
-      if (availableQuantity < item.quantity) {
-        throw new Error(
-          `Not enough stock for "${stockResult.rows[0].name}". Available: ${availableQuantity}, Requested: ${item.quantity}`
-        );
-      }
-    }
-
-    let totalAmount = 0;
-    for (const item of items) {
-      totalAmount += item.quantity * item.rate;
-    }
-
-    // 1. Create the voucher record
-    const voucherResult = await client.query(
-      `INSERT INTO vouchers (company_id, voucher_type, ledger_id, voucher_date, total_amount, notes)
-       VALUES ($1, 'sales', $2, $3, $4, $5) RETURNING *`,
-      [companyId, ledgerId, voucherDate || new Date(), totalAmount, notes || null]
-    );
-    const voucher = voucherResult.rows[0];
-
-    // 2. Create each voucher_item, AND decrease that stock item's quantity
-    for (const item of items) {
-      const amount = item.quantity * item.rate;
-
-      await client.query(
-        `INSERT INTO voucher_items (voucher_id, stock_item_id, quantity, rate, amount)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [voucher.id, item.stockItemId, item.quantity, item.rate, amount]
-      );
-
-      // Sales DECREASE stock on hand (opposite of purchases)
-      await client.query(
-        `UPDATE stock_items SET quantity = quantity - $1 WHERE id = $2`,
-        [item.quantity, item.stockItemId]
-      );
-    }
-
-    // 3. Update the customer's ledger balance (sale = they owe us less, or we've recorded income)
-    //    Simplified MVP logic: decrease their balance
-    await client.query(
-      `UPDATE ledgers SET opening_balance = opening_balance - $1 WHERE id = $2`,
-      [totalAmount, ledgerId]
-    );
-
-    await client.query("COMMIT");
-
-    res.status(201).json({
-      message: "Sales voucher created successfully",
-      voucher,
-    });
-  } catch (error) {
-    await client.query("ROLLBACK");
-    console.error("Create sales voucher error:", error);
-    // If our own stock-check threw the error, show that specific message;
-    // otherwise show a generic one
-    res.status(400).json({ message: error.message || "Server error creating sales voucher" });
-  } finally {
-    client.release();
   }
 };
 

@@ -16,7 +16,7 @@ function Vouchers() {
   const [filterType, setFilterType] = useState("all");
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalType, setModalType] = useState("purchase"); // which kind of voucher we're creating
+  const [modalType, setModalType] = useState("purchase");
 
   useEffect(() => {
     if (activeCompany) {
@@ -57,7 +57,6 @@ function Vouchers() {
       setModalOpen(false);
       fetchAll();
     } catch (err) {
-      // Show the backend's specific error (e.g. "Not enough stock for X")
       alert(err.response?.data?.message || "Failed to save voucher");
     }
   };
@@ -154,7 +153,7 @@ function Vouchers() {
                     {v.notes && ` • ${v.notes}`}
                   </p>
                 </div>
-                <span className="font-bold text-gray-800">₹{v.total_amount}</span>
+                <span className="font-bold text-gray-800">₹{v.grand_total}</span>
               </div>
             ))}
           </div>

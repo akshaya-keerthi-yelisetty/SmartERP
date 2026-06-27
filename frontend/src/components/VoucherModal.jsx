@@ -3,19 +3,19 @@ import { useState, useEffect } from "react";
 function VoucherModal({ isOpen, onClose, onSave, voucherType, ledgers, stockItems }) {
   const [ledgerId, setLedgerId] = useState("");
   const [voucherDate, setVoucherDate] = useState(
-    new Date().toISOString().split("T")[0] // defaults to today, formatted YYYY-MM-DD
+    new Date().toISOString().split("T")[0]
   );
   const [notes, setNotes] = useState("");
-  // Each line item: { stockItemId, quantity, rate }
+  const [gstPercent, setGstPercent] = useState("0");
   const [items, setItems] = useState([{ stockItemId: "", quantity: "", rate: "" }]);
   const [error, setError] = useState("");
 
-  // Reset the form every time the modal opens fresh
   useEffect(() => {
     if (isOpen) {
       setLedgerId("");
       setVoucherDate(new Date().toISOString().split("T")[0]);
       setNotes("");
+      setGstPercent("0");
       setItems([{ stockItemId: "", quantity: "", rate: "" }]);
       setError("");
     }
@@ -23,7 +23,6 @@ function VoucherModal({ isOpen, onClose, onSave, voucherType, ledgers, stockItem
 
   if (!isOpen) return null;
 
-  // Updates one field of one specific item in the items array
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...items];
     updatedItems[index] = { ...updatedItems[index], [field]: value };
@@ -38,12 +37,14 @@ function VoucherModal({ isOpen, onClose, onSave, voucherType, ledgers, stockItem
     setItems(items.filter((_, i) => i !== index));
   };
 
-  // Live-calculated total, recalculated on every render as the user types
   const total = items.reduce((sum, item) => {
     const qty = parseFloat(item.quantity) || 0;
     const rate = parseFloat(item.rate) || 0;
     return sum + qty * rate;
   }, 0);
+
+  const gstAmount = (total * (parseFloat(gstPercent) || 0)) / 100;
+  const grandTotal = total + gstAmount;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -64,6 +65,7 @@ function VoucherModal({ isOpen, onClose, onSave, voucherType, ledgers, stockItem
       ledgerId,
       voucherDate,
       notes,
+      gstPercent: parseFloat(gstPercent) || 0,
       items: validItems.map((item) => ({
         stockItemId: parseInt(item.stockItemId),
         quantity: parseFloat(item.quantity),
@@ -177,6 +179,18 @@ function VoucherModal({ isOpen, onClose, onSave, voucherType, ledgers, stockItem
           </button>
 
           <label className="block text-sm font-medium text-gray-700 mb-1">
+            GST % (optional)
+          </label>
+          <input
+            type="number"
+            value={gstPercent}
+            onChange={(e) => setGstPercent(e.target.value)}
+            step="0.01"
+            placeholder="e.g. 18"
+            className="w-full border border-gray-300 rounded p-2 mb-4"
+          />
+
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Notes (optional)
           </label>
           <input
@@ -186,9 +200,27 @@ function VoucherModal({ isOpen, onClose, onSave, voucherType, ledgers, stockItem
             className="w-full border border-gray-300 rounded p-2 mb-4"
           />
 
-          <div className="border-t pt-3 mb-4 flex justify-between items-center">
-            <span className="font-semibold text-gray-700">Total:</span>
-            <span className="font-bold text-lg text-blue-600">₹{total.toFixed(2)}</span>
+          <div className="border-t pt-3 mb-4 space-y-1">
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>Items Total:</span>
+              <span>₹{total.toFixed(2)}</span>
+            </div>
+            {parseFloat(gstPercent) > 0 && (
+              <>
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>CGST ({(parseFloat(gstPercent) / 2).toFixed(2)}%):</span>
+                  <span>₹{(gstAmount / 2).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>SGST ({(parseFloat(gstPercent) / 2).toFixed(2)}%):</span>
+                  <span>₹{(gstAmount / 2).toFixed(2)}</span>
+                </div>
+              </>
+            )}
+            <div className="flex justify-between items-center pt-1">
+              <span className="font-semibold text-gray-700">Grand Total:</span>
+              <span className="font-bold text-lg text-blue-600">₹{grandTotal.toFixed(2)}</span>
+            </div>
           </div>
 
           <div className="flex gap-2">
