@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard";
 import Ledgers from "./pages/Ledgers";
 import Inventory from "./pages/Inventory";
 import Vouchers from "./pages/Vouchers";
+import Reports from "./pages/Reports";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 
@@ -44,6 +45,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Vouchers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <ProtectedRoute>
+                <Reports />
               </ProtectedRoute>
             }
           />

@@ -9,6 +9,7 @@ const ledgerRoutes = require("./routes/ledgerRoutes");
 const stockGroupRoutes = require("./routes/stockGroupRoutes");
 const stockItemRoutes = require("./routes/stockItemRoutes");
 const voucherRoutes = require("./routes/voucherRoutes");
+const reportRoutes = require("./routes/reportRoutes");
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use("/api/ledgers", ledgerRoutes);
 app.use("/api/stock-groups", stockGroupRoutes);
 app.use("/api/stock-items", stockItemRoutes);
 app.use("/api/vouchers", voucherRoutes);
+app.use("/api/reports", reportRoutes);
 
 const PORT = process.env.PORT || 5000;
 

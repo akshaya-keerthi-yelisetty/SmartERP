@@ -121,6 +121,9 @@ function Dashboard() {
 <Link to="/vouchers" className="text-blue-600 hover:underline text-sm font-medium">
   Vouchers →
 </Link>
+<Link to="/reports" className="text-blue-600 hover:underline text-sm font-medium">
+  Reports →
+</Link>
               <button
                 onClick={() => selectCompany(null)}
                 className="text-blue-600 hover:underline text-sm"
